@@ -12,6 +12,7 @@ const chains = fromFileUrl(new URL("../../fixtures/", import.meta.url));
 
 Deno.test(`${ID} happy pass (synthetic): one credit, verdict PASS`, async () => {
     const unit = await testSealedUnit(ID);
+    const fixture = await loadFixture(`${chains}synthetic-check-pass.json`);
     const result = await runEndpoint({
         unit,
         input: {
@@ -22,7 +23,7 @@ Deno.test(`${ID} happy pass (synthetic): one credit, verdict PASS`, async () => 
             },
         },
         mode: "replay",
-        fixture: await loadFixture(`${chains}synthetic-check-pass.json`),
+        fixture,
     });
     assertEquals(result.httpStatus, 200);
     assertEquals(result.isProviderError, false);
@@ -30,15 +31,12 @@ Deno.test(`${ID} happy pass (synthetic): one credit, verdict PASS`, async () => 
         credits: { default: 1 },
         evidence: { CALL: 1 },
     });
-    const output = result.output as Record<string, unknown>;
-    assertEquals(output.verdict, "PASS");
-    assertEquals(Array.isArray(output.issues), true);
-    assertEquals((output.issues as unknown[]).length, 0);
-    assertEquals(output.repaired_body, null);
+    assertEquals(result.output, fixture.calls[0].res.body);
 });
 
 Deno.test(`${ID} happy review with issues (synthetic): one credit, verdict REVIEW, repaired_body returned`, async () => {
     const unit = await testSealedUnit(ID);
+    const fixture = await loadFixture(`${chains}synthetic-check-review.json`);
     const result = await runEndpoint({
         unit,
         input: {
@@ -49,7 +47,7 @@ Deno.test(`${ID} happy review with issues (synthetic): one credit, verdict REVIE
             },
         },
         mode: "replay",
-        fixture: await loadFixture(`${chains}synthetic-check-review.json`),
+        fixture,
     });
     assertEquals(result.httpStatus, 200);
     assertEquals(result.isProviderError, false);
@@ -57,14 +55,7 @@ Deno.test(`${ID} happy review with issues (synthetic): one credit, verdict REVIE
         credits: { default: 1 },
         evidence: { CALL: 1 },
     });
-    const output = result.output as Record<string, unknown>;
-    assertEquals(output.verdict, "REVIEW");
-    assertEquals(Array.isArray(output.issues), true);
-    const issues = output.issues as Array<Record<string, unknown>>;
-    assertEquals(issues.length, 1);
-    assertEquals(issues[0].snippet, "let's talk Tuesday at 2pm");
-    assertEquals(issues[0].severity, "medium");
-    assertEquals(typeof output.repaired_body, "string");
+    assertEquals(result.output, fixture.calls[0].res.body);
 });
 
 Deno.test(`${ID} provider error (synthetic 401): zero usage`, async () => {
