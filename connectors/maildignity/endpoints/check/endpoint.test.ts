@@ -1,6 +1,8 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl } from "@std/path";
+import { type Json } from "@shared/core";
 import {
+    assertInputAccepted,
     liveSkip,
     loadFixture,
     runEndpoint,
@@ -80,7 +82,7 @@ Deno.test(`${ID} provider error (synthetic 401): zero usage`, async () => {
     });
 });
 
-Deno.test(`${ID} schema gate: accepts valid email_text and rejects invalid inputs`, async () => {
+Deno.test(`${ID} schema gate: accepts valid email_text, optional prospect, and rejects invalid inputs`, async () => {
     const unit = await testSealedUnit(ID);
     const fixture = await loadFixture(`${chains}synthetic-check-pass.json`);
 
@@ -94,56 +96,143 @@ Deno.test(`${ID} schema gate: accepts valid email_text and rejects invalid input
             },
         },
         mode: "replay",
-        fixture,
+        fixture: await loadFixture(`${chains}synthetic-check-pass.json`),
     });
     assertEquals(validRun.httpStatus, 200);
 
-    // Rejection assertions
+    // Passing: full prospect payload (name, company, role) is accepted through runEndpoint
+    const prospectRun = await runEndpoint({
+        unit,
+        input: {
+            body: {
+                email_text:
+                    "Hi Alex,\n\nI saw your recent post about sales outreach. Would you be open to a quick exchange next week?\n\nBest,\nEnrico",
+                mode: "full",
+                prospect: {
+                    name: "Alex Mercer",
+                    company: "Acme Corp",
+                    role: "VP of Sales",
+                },
+            },
+        },
+        mode: "replay",
+        fixture: await loadFixture(`${chains}synthetic-check-pass.json`),
+    });
+    assertEquals(prospectRun.httpStatus, 200);
+
+    // Assert input accepted for partial and full prospect variants
+    const validVariants: Record<string, Json>[] = [
+        {
+            email_text: "Checking in.",
+            prospect: { name: "Alex" },
+        },
+        {
+            email_text: "Checking in.",
+            prospect: { company: "Acme Corp" },
+        },
+        {
+            email_text: "Checking in.",
+            prospect: { role: "CTO" },
+        },
+        {
+            email_text: "Checking in.",
+            prospect: { name: "Alex", company: "Acme", role: "CEO" },
+        },
+    ];
+    for (const ok of validVariants) {
+        await assertInputAccepted({
+            unit,
+            input: { body: ok },
+            mode: "replay",
+            fixture: await loadFixture(`${chains}synthetic-check-pass.json`),
+        });
+    }
+
+    // Rejection assertions: missing required email_text or empty
     await assertRejects(
-        () =>
-            runEndpoint({
+        async () => {
+            await runEndpoint({
                 unit,
                 input: { body: {} },
                 mode: "replay",
                 fixture,
-            }),
+            });
+        },
         Error,
         "INVALID_INPUT",
     );
     await assertRejects(
-        () =>
-            runEndpoint({
+        async () => {
+            await runEndpoint({
                 unit,
                 input: { body: { email_text: "" } },
                 mode: "replay",
                 fixture,
-            }),
+            });
+        },
         Error,
         "INVALID_INPUT",
     );
+    // Invalid mode
     await assertRejects(
-        () =>
-            runEndpoint({
+        async () => {
+            await runEndpoint({
                 unit,
                 input: {
                     body: { email_text: "hello", mode: "invalid_mode" },
                 },
                 mode: "replay",
                 fixture,
-            }),
+            });
+        },
         Error,
         "INVALID_INPUT",
     );
+    // Unknown top-level key (strict)
     await assertRejects(
-        () =>
-            runEndpoint({
+        async () => {
+            await runEndpoint({
                 unit,
                 input: {
                     body: { email_text: "hello", unknown_key: true },
                 },
                 mode: "replay",
                 fixture,
-            }),
+            });
+        },
+        Error,
+        "INVALID_INPUT",
+    );
+    // Invalid prospect type (not object)
+    await assertRejects(
+        async () => {
+            await runEndpoint({
+                unit,
+                input: {
+                    body: { email_text: "hello", prospect: "Alex" },
+                },
+                mode: "replay",
+                fixture,
+            });
+        },
+        Error,
+        "INVALID_INPUT",
+    );
+    // Unknown key inside prospect (strictObject)
+    await assertRejects(
+        async () => {
+            await runEndpoint({
+                unit,
+                input: {
+                    body: {
+                        email_text: "hello",
+                        prospect: { name: "Alex", invalid_field: "test" },
+                    },
+                },
+                mode: "replay",
+                fixture,
+            });
+        },
         Error,
         "INVALID_INPUT",
     );
