@@ -5,9 +5,9 @@ export const zMaildignityCheckBody = z.strictObject({
         "The full text or draft of the email to audit.",
     ),
     prospect: z.strictObject({
-        name: z.string().max(100).optional().describe("Prospect's full name."),
-        company: z.string().max(100).optional().describe("Prospect's company."),
-        role: z.string().max(100).optional().describe("Prospect's job title or role."),
+        name: z.string().optional().describe("Prospect's full name."),
+        company: z.string().optional().describe("Prospect's company."),
+        role: z.string().optional().describe("Prospect's job title or role."),
     }).optional().describe(
         "Optional recipient context (name, company, role) to evaluate personalization and fit.",
     ),
