@@ -60,7 +60,10 @@ Deno.test(`${ID} happy review with issues (synthetic): one credit, verdict REVIE
     const output = result.output as Record<string, unknown>;
     assertEquals(output.verdict, "REVIEW");
     assertEquals(Array.isArray(output.issues), true);
-    assertEquals((output.issues as unknown[]).length, 1);
+    const issues = output.issues as Array<Record<string, unknown>>;
+    assertEquals(issues.length, 1);
+    assertEquals(issues[0].snippet, "let's talk Tuesday at 2pm");
+    assertEquals(issues[0].severity, "medium");
     assertEquals(typeof output.repaired_body, "string");
 });
 
@@ -86,9 +89,25 @@ Deno.test(`${ID} provider error (synthetic 401): zero usage`, async () => {
     });
 });
 
-Deno.test(`${ID} schema gate: rejects empty/missing email_text and invalid mode`, async () => {
+Deno.test(`${ID} schema gate: accepts valid email_text and rejects invalid inputs`, async () => {
     const unit = await testSealedUnit(ID);
     const fixture = await loadFixture(`${chains}synthetic-check-pass.json`);
+
+    // Passing near-twin: valid email_text without mode is accepted
+    const validRun = await runEndpoint({
+        unit,
+        input: {
+            body: {
+                email_text:
+                    "Hi Alex,\n\nI saw your recent post about sales outreach. Would you be open to a quick exchange next week?\n\nBest,\nEnrico",
+            },
+        },
+        mode: "replay",
+        fixture,
+    });
+    assertEquals(validRun.httpStatus, 200);
+
+    // Rejection assertions
     await assertRejects(
         () =>
             runEndpoint({
